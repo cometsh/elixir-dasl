@@ -30,11 +30,8 @@ defmodule DASL.DRISL do
 
   defp remap_cid_tags(term), do: term
 
-  # CIDs are always tagged with `42` in DRISL.
-  # TODO?: stringify them?
-  # TODO: custom CID struct
-  defp do_remap(%CBOR.Tag{tag: 42, value: %CBOR.Tag{tag: :bytes, value: <<0, cid::binary>>}}),
-    do: cid
+  defp do_remap(%CBOR.Tag{tag: 42} = tag),
+    do: DASL.CID.from_cbor(tag)
 
   defp do_remap(%CBOR.Tag{} = tag), do: tag
   defp do_remap(%{} = container), do: remap_cid_tags(container)
