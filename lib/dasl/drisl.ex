@@ -1,40 +1,50 @@
 defmodule DASL.DRISL do
   @moduledoc """
-  DRISL decoder.
+  DRISL (Deterministic Representation for Interoperable Structures & Links).
+
+  A deterministic CBOR profile with native support for CIDs as links. Delegates
+  to `DASL.DRISL.Decoder` and `DASL.DRISL.Encoder` for the actual work.
+
   Spec: https://dasl.ing/drisl.html
   """
 
   @doc """
-  Decode a given binary using DRISL.
+  Decodes a DRISL-encoded binary into an Elixir term.
+
+  CIDs encoded as CBOR tag 42 are decoded into `%DASL.CID{}` structs.
+  Returns `{:ok, term, rest}` on success, or `{:error, reason}` on failure.
+
+  ## Examples
+
+      iex> DASL.DRISL.decode(<<0xa1, 0x61, 0x61, 0x01>>)
+      {:ok, %{"a" => 1}, ""}
+
+      iex> DASL.DRISL.decode(<<0x83, 0x01, 0x02, 0x03>>)
+      {:ok, [1, 2, 3], ""}
+
   """
   @spec decode(binary()) :: {:ok, any(), binary()} | {:error, atom()}
-  def decode(binary) do
-    case CBOR.decode(binary) do
-      {:ok, value, rest} -> {:ok, remap_cid_tags(value), rest}
-      e -> e
-    end
-  end
+  defdelegate decode(binary), to: DASL.DRISL.Decoder
 
-  # Recurse through a data structure and extract all CIDs from their tags.
-  @spec remap_cid_tags(any()) :: any()
-  defp remap_cid_tags(%{} = container) do
-    container
-    |> Enum.into([])
-    |> Enum.map(fn {k, v} -> {k, do_remap(v)} end)
-    |> Enum.into(%{})
-  end
+  @doc """
+  Encodes an Elixir term into a DRISL-compliant CBOR binary.
 
-  defp remap_cid_tags([_ | _] = container) do
-    Enum.map(container, &do_remap/1)
-  end
+  Map keys are sorted in bytewise-lexicographic order of their encoded form.
+  `%DASL.CID{}` values are encoded as CBOR tag 42 bytestrings.
+  Returns `{:ok, binary}` on success, or `{:error, reason}` on failure.
 
-  defp remap_cid_tags(term), do: term
+  ## Examples
 
-  defp do_remap(%CBOR.Tag{tag: 42} = tag),
-    do: DASL.CID.from_cbor(tag)
+      iex> DASL.DRISL.encode(%{"a" => 1})
+      {:ok, <<0xa1, 0x61, 0x61, 0x01>>}
 
-  defp do_remap(%CBOR.Tag{} = tag), do: tag
-  defp do_remap(%{} = container), do: remap_cid_tags(container)
-  defp do_remap([_ | _] = container), do: remap_cid_tags(container)
-  defp do_remap(scalar), do: scalar
+      iex> DASL.DRISL.encode([1, 2, 3])
+      {:ok, <<0x83, 0x01, 0x02, 0x03>>}
+
+      iex> DASL.DRISL.encode(true)
+      {:ok, <<0xf5>>}
+
+  """
+  @spec encode(any()) :: {:ok, binary()} | {:error, atom()}
+  defdelegate encode(term), to: DASL.DRISL.Encoder
 end
