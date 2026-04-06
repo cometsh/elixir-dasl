@@ -1,19 +1,29 @@
 defmodule DASL.CAR.Decoder do
   @moduledoc """
-  Module for decoding DASL CAR files.
+  Decoder for DASL CAR binary streams.
   Spec: https://dasl.ing/car.html
   """
+
+  alias DASL.{CAR, CID, DRISL}
+  alias Varint.LEB128
+
+  @cid_byte_size 36
 
   @type header_error() :: {:error, :header, atom()}
   @type block_error() :: {:error, :block, atom()}
 
-  alias DASL.{CAR, DRISL}
-  alias Varint.LEB128
+  @doc """
+  Decodes a CAR binary stream into a `DASL.CAR` struct.
 
-  @spec decode(binary()) :: {:ok, CAR.t()} | header_error() | block_error()
-  def decode(binary) do
-    with {:ok, roots, rest} <- header(binary),
-         {:ok, blocks} <- data(rest) do
+  Accepts the same options as `DASL.CAR.decode/2`.
+  """
+  @spec decode(binary(), keyword()) :: {:ok, CAR.t()} | header_error() | block_error()
+  def decode(binary, opts \\ []) do
+    verify = Keyword.get(opts, :verify, true)
+
+    with {:ok, metadata, rest} <- header(binary),
+         {:ok, blocks} <- blocks(rest, %{}, verify) do
+      roots = Map.fetch!(metadata, "roots")
       {:ok, %CAR{version: 1, roots: roots, blocks: blocks}}
     end
   end
@@ -21,56 +31,92 @@ defmodule DASL.CAR.Decoder do
   @spec header(binary()) :: {:ok, map(), binary()} | header_error()
   defp header(binary) do
     with {length, rest} <- LEB128.decode(binary),
-         <<header::binary-size(length), rest::binary>> <- rest,
-         #  TODO: make sure header is always CBOR
-         {:ok, %{"version" => 1, "roots" => roots}, <<>>} <- DRISL.decode(header) do
-      {:ok, roots, rest}
+         :ok <- validate_header_length(length),
+         <<header_bin::binary-size(length), rest::binary>> <- rest,
+         {:ok, metadata, <<>>} <- DRISL.decode(header_bin),
+         :ok <- validate_header_map(metadata) do
+      {:ok, metadata, rest}
     else
-      # Invalid header length
       <<_::binary>> -> {:error, :header, :too_short}
-      # Incorrect header structure
-      {:ok, _, _} -> {:error, :invalid_header}
-      # CBOR error
-      {:error, reason} -> {:error, :invalid_header, reason}
+      {:ok, _, leftover} when is_binary(leftover) -> {:error, :header, :invalid_encoding}
+      {:error, :header, _} = err -> err
+      {:error, _reason} -> {:error, :header, :invalid_encoding}
     end
   end
 
-  @spec data(binary(), map()) :: {:ok, %{binary() => any()}} | block_error()
-  defp data(binary, blocks \\ %{}) do
+  @spec validate_header_length(non_neg_integer()) :: :ok | header_error()
+  defp validate_header_length(0), do: {:error, :header, :empty}
+  defp validate_header_length(_), do: :ok
+
+  @spec validate_header_map(any()) :: :ok | header_error()
+  defp validate_header_map(metadata) when not is_map(metadata),
+    do: {:error, :header, :not_a_map}
+
+  defp validate_header_map(%{"version" => version}) when version != 1,
+    do: {:error, :header, :unsupported_version}
+
+  defp validate_header_map(%{"version" => 1, "roots" => roots}) when is_list(roots) do
+    if Enum.all?(roots, &match?(%CID{}, &1)) do
+      :ok
+    else
+      {:error, :header, :invalid_roots}
+    end
+  end
+
+  defp validate_header_map(%{"version" => 1}), do: {:error, :header, :missing_roots}
+  defp validate_header_map(_), do: {:error, :header, :missing_version}
+
+  @spec blocks(binary(), map(), boolean()) :: {:ok, map()} | block_error()
+  defp blocks(<<>>, acc, _verify), do: {:ok, acc}
+
+  defp blocks(binary, acc, verify) do
     with {length, rest} <- LEB128.decode(binary),
-         <<cid_data::binary-size(length), rest::binary>> <- rest,
-         {_version, cid, data} <- cid(cid_data),
-         # TODO: support DAG-PB & RAW modes
-         {:ok, block, <<>>} <- DRISL.decode(data),
-         blocks <- Map.put(blocks, cid, block) do
-      case rest do
-        <<>> -> {:ok, blocks}
-        rest -> data(rest, blocks)
-      end
+         :ok <- validate_block_length(length),
+         <<cid_bytes::binary-size(@cid_byte_size), data::binary-size(length - @cid_byte_size),
+           rest::binary>> <- rest,
+         {:ok, cid} <- parse_cid(cid_bytes),
+         :ok <- maybe_verify(verify, cid, data) do
+      blocks(rest, Map.put(acc, cid, data), verify)
     else
       <<_::binary>> -> {:error, :block, :too_short}
-      {:ok, _, _} -> {:error, :block, :incorrect_length}
+      {:error, :block, _} = err -> err
       {:error, reason} -> {:error, :block, reason}
     end
   end
 
-  @doc """
-  Extract a CIDv0 or CIDv1 from an arbitrary byte stream.
-  """
-  @spec cid(binary()) :: {integer(), binary(), binary()}
-  def cid(<<0x12, 0x20, id::32, rest::binary>>) do
-    {0, <<0x12, 0x20, id>>, rest}
+  @spec validate_block_length(non_neg_integer()) :: :ok | block_error()
+  defp validate_block_length(length) when length < @cid_byte_size,
+    do: {:error, :block, :too_short}
+
+  defp validate_block_length(_), do: :ok
+
+  @spec parse_cid(binary()) :: {:ok, CID.t()} | block_error()
+  defp parse_cid(cid_bytes) do
+    case CID.decode(cid_bytes) do
+      {:ok, fields} ->
+        {:ok,
+         struct!(CID,
+           version: fields.version,
+           codec: fields.codec,
+           hash_type: fields.hash_type,
+           hash_size: fields.hash_size,
+           digest: fields.digest,
+           bytes: cid_bytes
+         )}
+
+      {:error, reason} ->
+        {:error, :block, {:invalid_cid, reason}}
+    end
   end
 
-  def cid(<<0x01, binary::binary>>) do
-    # CIDv1 = <<version::varint, codec::varint, multihash::binary>> where multihash = <<function_code, length, digest::binary-size(length)>>
-    # {1 = version, rest} = LEB128.decode(binary)
-    {codec, <<mh_1, mh_2::binary-size(1), rest::binary>>} = LEB128.decode(binary)
-    {mh_length, _} = LEB128.decode(mh_2)
-    <<mh_rest::binary-size(mh_length), rest::binary>> = rest
-    multihash = <<mh_1, mh_2::binary, mh_rest::binary>>
-    cid = <<0x01, LEB128.encode(codec)::binary, multihash::binary>>
+  @spec maybe_verify(boolean(), CID.t(), binary()) :: :ok | block_error()
+  defp maybe_verify(false, _cid, _data), do: :ok
 
-    {1, cid, rest}
+  defp maybe_verify(true, cid, data) do
+    if CID.verify?(cid, data) do
+      :ok
+    else
+      {:error, :block, :cid_mismatch}
+    end
   end
 end
