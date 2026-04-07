@@ -223,6 +223,8 @@ defmodule DASL.DRISL.Decoder do
     end
   end
 
+  defp validate_and_remap(%CBOR.Tag{tag: :bytes} = tag), do: {:ok, tag}
+
   defp validate_and_remap(%CBOR.Tag{tag: :simple}),
     do: {:error, :forbidden_simple}
 

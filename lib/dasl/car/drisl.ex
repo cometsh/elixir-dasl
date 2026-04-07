@@ -11,6 +11,7 @@ defmodule DASL.CAR.DRISL do
 
   use TypedStruct
   alias DASL.{CAR, CID, DRISL}
+  alias DASL.CAR.StreamDecoder
 
   typedstruct enforce: true do
     field :version, pos_integer(), default: 1
@@ -63,6 +64,57 @@ defmodule DASL.CAR.DRISL do
       raw_car = %CAR{version: 1, roots: roots, blocks: encoded_blocks}
       CAR.encode(raw_car, opts)
     end
+  end
+
+  @doc """
+  Transforms a stream of binary chunks into a stream of decoded CAR items,
+  with block data DRISL-decoded into Elixir terms.
+
+  Each element of `chunk_stream` must be a binary of any size. Items are
+  emitted as soon as a complete frame has been buffered:
+
+    * `{:header, version, roots}` — emitted once when the header is parsed
+    * `{:block, cid, term}` — emitted per block; `term` is the DRISL-decoded
+      Elixir value
+
+  Raises on parse errors (invalid header, truncated stream, CID mismatch,
+  or DRISL decoding failure).
+
+  ## Options
+
+    * `:verify` — boolean, default `true`. Verifies each block against its CID
+      before DRISL decoding.
+
+  ## Examples
+
+      File.stream!("large.car", [], 65_536)
+      |> DASL.CAR.DRISL.stream_decode()
+      |> Enum.each(fn
+        {:header, _version, roots} -> IO.inspect(roots)
+        {:block, cid, term}        -> IO.inspect({cid, term})
+      end)
+
+  """
+  @spec stream_decode(Enumerable.t(), keyword()) :: Enumerable.t()
+  def stream_decode(chunk_stream, opts \\ []) do
+    chunk_stream
+    |> StreamDecoder.decode_stream(opts)
+    |> Stream.map(fn
+      {:header, version, roots} ->
+        {:header, version, roots}
+
+      {:block, cid, raw} ->
+        case DRISL.decode(raw) do
+          {:ok, term, ""} ->
+            {:block, cid, term}
+
+          {:ok, _, _leftover} ->
+            raise "CAR.DRISL stream: trailing bytes in block #{inspect(cid)}"
+
+          {:error, reason} ->
+            raise "CAR.DRISL stream: failed to DRISL-decode block #{inspect(cid)}: #{inspect(reason)}"
+        end
+    end)
   end
 
   @doc """

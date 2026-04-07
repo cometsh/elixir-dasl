@@ -11,6 +11,7 @@ defmodule DASL.CAR do
 
   use TypedStruct
   alias DASL.{CAR, CID}
+  alias DASL.CAR.StreamDecoder
 
   typedstruct enforce: true do
     field :version, pos_integer(), default: 1
@@ -45,6 +46,34 @@ defmodule DASL.CAR do
   @spec encode(t(), keyword()) ::
           {:ok, binary()} | CAR.Encoder.header_error() | CAR.Encoder.block_error()
   def encode(%CAR{} = car, opts \\ []), do: CAR.Encoder.encode(car, opts)
+
+  @doc """
+  Transforms a stream of binary chunks into a stream of decoded CAR items.
+
+  Each element of `chunk_stream` must be a binary of any size. Items are
+  emitted as soon as a complete frame has been buffered:
+
+    * `{:header, version, roots}` — emitted once when the header is parsed
+    * `{:block, cid, data}` — emitted per block; `data` is the raw binary
+
+  Raises on parse errors (invalid header, truncated stream, CID mismatch).
+
+  ## Options
+
+    * `:verify` — boolean, default `true`. Verifies each block against its CID.
+
+  ## Examples
+
+      File.stream!("large.car", [], 65_536)
+      |> DASL.CAR.stream_decode()
+      |> Enum.each(fn
+        {:header, _version, roots} -> IO.inspect(roots)
+        {:block, cid, _data}       -> IO.inspect(cid)
+      end)
+
+  """
+  @spec stream_decode(Enumerable.t(), keyword()) :: Enumerable.t()
+  def stream_decode(chunk_stream, opts \\ []), do: StreamDecoder.decode_stream(chunk_stream, opts)
 
   @doc """
   Computes the CID for `data`, adds it to the CAR's blocks, and returns the
