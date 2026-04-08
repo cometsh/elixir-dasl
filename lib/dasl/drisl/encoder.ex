@@ -2,18 +2,8 @@ defmodule DASL.DRISL.Encoder do
   @moduledoc """
   DRISL encoder.
 
-  Encodes Elixir terms into DRISL-compliant CBOR binary. DRISL is a strict
-  profile of CBOR with the following constraints enforced at encode time:
-
-  - Map keys must be strings.
-  - Map keys are encoded in bytewise-lexicographic order of their CBOR encoding
-    (length-first canonical sort, as per RFC 7049 §3.9 and the DRISL spec).
-  - Floats are always encoded as 64-bit IEEE 754 (`0xfb`). Half-precision and
-    single-precision float encodings are never produced.
-  - Only `true`, `false`, and `nil` are valid simple values.
-  - `%DASL.CID{}` values are encoded as CBOR tag 42 bytestrings.
-  - No other CBOR tags are emitted.
-  - No indefinite-length encodings are produced.
+  Encodes Elixir terms into DRISL-compliant CBOR binary. See the spec for the
+  full set of constraints enforced at encode time.
 
   Spec: https://dasl.ing/drisl.html
   """
@@ -22,9 +12,6 @@ defmodule DASL.DRISL.Encoder do
   Encodes an Elixir term into a DRISL-compliant CBOR binary.
 
   Returns `{:ok, binary}` on success, or `{:error, reason}` on failure.
-  `reason` is one of:
-    - `:non_string_map_key` — a map key is not a string
-    - `:unsupported_type` — a value type not representable in DRISL
 
   ## Examples
 

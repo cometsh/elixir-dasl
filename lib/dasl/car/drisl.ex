@@ -26,7 +26,7 @@ defmodule DASL.CAR.DRISL do
 
   ## Options
 
-    * `:verify` — boolean, default `true`. Verifies each block's raw data
+    - `:verify` — boolean, default `true`. Verifies each block's raw data
       against its CID before DRISL decoding. Returns
       `{:error, :block, :cid_mismatch}` on failure.
 
@@ -52,7 +52,7 @@ defmodule DASL.CAR.DRISL do
 
   ## Options
 
-    * `:verify` — boolean, default `true`. Verifies each DRISL-encoded block
+    - `:verify` — boolean, default `true`. Verifies each DRISL-encoded block
       binary against its CID before writing. Returns
       `{:error, :block, :cid_mismatch}` on failure.
 
@@ -73,8 +73,8 @@ defmodule DASL.CAR.DRISL do
   Each element of `chunk_stream` must be a binary of any size. Items are
   emitted as soon as a complete frame has been buffered:
 
-    * `{:header, version, roots}` — emitted once when the header is parsed
-    * `{:block, cid, term}` — emitted per block; `term` is the DRISL-decoded
+    - `{:header, version, roots}` — emitted once when the header is parsed
+    - `{:block, cid, term}` — emitted per block; `term` is the DRISL-decoded
       Elixir value
 
   Raises on parse errors (invalid header, truncated stream, CID mismatch,
@@ -82,7 +82,7 @@ defmodule DASL.CAR.DRISL do
 
   ## Options
 
-    * `:verify` — boolean, default `true`. Verifies each block against its CID
+    - `:verify` — boolean, default `true`. Verifies each block against its CID
       before DRISL decoding.
 
   ## Examples

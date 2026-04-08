@@ -11,8 +11,8 @@ defmodule DASL.DRISL do
   @doc """
   Decodes a DRISL-encoded binary into an Elixir term.
 
-  CIDs encoded as CBOR tag 42 are decoded into `%DASL.CID{}` structs.
-  Returns `{:ok, term, rest}` on success, or `{:error, reason}` on failure.
+  CBOR tag 42 values are decoded into `%DASL.CID{}` structs. Returns
+  `{:ok, term, rest}` on success, or `{:error, reason}` on failure.
 
   ## Examples
 
@@ -29,8 +29,6 @@ defmodule DASL.DRISL do
   @doc """
   Encodes an Elixir term into a DRISL-compliant CBOR binary.
 
-  Map keys are sorted in bytewise-lexicographic order of their encoded form.
-  `%DASL.CID{}` values are encoded as CBOR tag 42 bytestrings.
   Returns `{:ok, binary}` on success, or `{:error, reason}` on failure.
 
   ## Examples

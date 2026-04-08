@@ -2,15 +2,8 @@ defmodule DASL.DRISL.Decoder do
   @moduledoc """
   DRISL decoder.
 
-  Validates and decodes a CBOR binary according to the DRISL profile:
-
-  - Only tag 42 (CIDs) is permitted; all other CBOR tags are rejected.
-  - Map keys must be strings.
-  - Simple values other than `true`, `false`, and `null` are rejected.
-  - Non-finite floats (infinity, negative infinity, NaN) are rejected.
-  - Half-precision (major 7, additional 25) and single-precision (major 7, additional 26)
-    float encodings are rejected; only 64-bit IEEE 754 is allowed.
-  - Indefinite-length items are rejected (enforced by the CBOR library).
+  Validates and decodes a CBOR binary according to the DRISL profile. See the
+  spec for the full set of constraints.
 
   Spec: https://dasl.ing/drisl.html
   """
@@ -18,18 +11,8 @@ defmodule DASL.DRISL.Decoder do
   @doc """
   Decodes a DRISL-encoded binary into an Elixir term.
 
-  CIDs encoded as CBOR tag 42 are decoded into `%DASL.CID{}` structs.
-
-  Returns `{:ok, term, rest}` on success, or `{:error, reason}` on failure.
-  `reason` is one of:
-    - `:half_precision_float` — half-precision float encoding found
-    - `:single_precision_float` — single-precision float encoding found
-    - `:cbor_decode_error` — CBOR is structurally invalid
-    - `:forbidden_tag` — a CBOR tag other than 42 was used
-    - `:non_string_map_key` — a map key is not a string
-    - `:forbidden_simple` — a simple value other than true/false/null
-    - `:forbidden_float` — a non-finite float (inf, -inf, NaN)
-    - `:invalid_cid` — tag-42 value does not contain a valid CID
+  CBOR tag 42 values are decoded into `%DASL.CID{}` structs. Returns
+  `{:ok, term, rest}` on success, or `{:error, reason}` on failure.
 
   ## Examples
 

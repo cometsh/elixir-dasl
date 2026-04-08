@@ -1,6 +1,13 @@
 defmodule DASL.CID do
   @moduledoc """
-  Struct for DASL CIDs.
+  DASL content identifier (CID).
+
+  A CID is a self-describing content address: it encodes a version, a codec
+  (`:raw` or `:drisl`), and a SHA-256 digest. CIDs can be round-tripped
+  through their canonical multibase string form, constructed by hashing
+  arbitrary data with `compute/2`, and verified against their content with
+  `verify?/2`.
+
   Spec: https://dasl.ing/cid.html
   """
 
@@ -24,8 +31,6 @@ defmodule DASL.CID do
 
   @doc """
   Parses a string-encoded CID into raw bytes.
-
-  Expects the `b` multibase prefix followed by a lowercase RFC 4648 base32-encoded payload.
 
   ## Examples
 
@@ -53,6 +58,10 @@ defmodule DASL.CID do
 
   @doc """
   Decodes a raw CID bytestring into its constituent fields.
+
+  Returns `{:ok, map}` on success, or `{:error, message}` if the bytes do not
+  conform to the CID spec (unsupported version, unknown codec, wrong hash
+  algorithm or size, truncated input).
 
   ## Examples
 
@@ -158,9 +167,7 @@ defmodule DASL.CID do
     do: "b" <> Base.encode32(bytes, case: :lower, padding: false)
 
   @doc """
-  Constructs a `DASL.CID` from a CBOR tag (tag 42).
-
-  CBOR-encoded CIDs have a leading null byte (`0x00`) prepended to the raw CID bytes.
+  Constructs a `DASL.CID` from a CBOR tag 42 value.
 
   ## Examples
 
@@ -195,7 +202,7 @@ defmodule DASL.CID do
   def from_cbor(_), do: {:error, "invalid CBOR CID tag"}
 
   @doc """
-  Converts a `DASL.CID` to a CBOR tag (tag 42) with the required leading null byte.
+  Converts a `DASL.CID` to a CBOR tag 42 value.
 
   ## Examples
 
@@ -217,9 +224,7 @@ defmodule DASL.CID do
     do: %CBOR.Tag{tag: 42, value: %CBOR.Tag{tag: :bytes, value: <<0, bytes::binary>>}}
 
   @doc """
-  Computes a CID for an arbitrary binary.
-
-  Hashes `data` with SHA-256 and returns a `DASL.CID` with the given codec (defaults to `:raw`).
+  Computes a CID for an arbitrary binary, defaulting to the `:raw` codec.
 
   ## Examples
 
@@ -289,7 +294,6 @@ defimpl String.Chars, for: DASL.CID do
 end
 
 defimpl Inspect, for: DASL.CID do
-
   def inspect(cid, _opts) do
     cid = DASL.CID.encode(cid)
     ~s'DASL.CID.new("#{cid}")'

@@ -24,8 +24,8 @@ defmodule DASL.CAR do
 
   ## Options
 
-    * `:verify` — boolean, default `true`. When enabled, each block's raw data
-      is verified against its CID digest using `DASL.CID.verify?/2`. Returns
+    - `:verify` — boolean, default `true`. Verifies each block's raw data
+      against its CID digest using `DASL.CID.verify?/2`. Returns
       `{:error, :block, :cid_mismatch}` on failure.
 
   """
@@ -38,8 +38,8 @@ defmodule DASL.CAR do
 
   ## Options
 
-    * `:verify` — boolean, default `true`. When enabled, the block binary is
-      verified against its CID digest using `DASL.CID.verify?/2`. Returns
+    - `:verify` — boolean, default `true`. Verifies each block binary against
+      its CID digest using `DASL.CID.verify?/2`. Returns
       `{:error, :block, :cid_mismatch}` on failure.
 
   """
@@ -53,14 +53,14 @@ defmodule DASL.CAR do
   Each element of `chunk_stream` must be a binary of any size. Items are
   emitted as soon as a complete frame has been buffered:
 
-    * `{:header, version, roots}` — emitted once when the header is parsed
-    * `{:block, cid, data}` — emitted per block; `data` is the raw binary
+    - `{:header, version, roots}` — emitted once when the header is parsed
+    - `{:block, cid, data}` — emitted per block; `data` is the raw binary
 
   Raises on parse errors (invalid header, truncated stream, CID mismatch).
 
   ## Options
 
-    * `:verify` — boolean, default `true`. Verifies each block against its CID.
+    - `:verify` — boolean, default `true`. Verifies each block against its CID.
 
   ## Examples
 

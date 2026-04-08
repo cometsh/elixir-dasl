@@ -8,9 +8,9 @@ defmodule DASL.CAR.StreamDecoder do
 
   Emits the following elements in order:
 
-    * `{:header, version, roots}` — exactly once, as soon as the header frame
+    - `{:header, version, roots}` — exactly once, as soon as the header frame
       has been fully received
-    * `{:block, cid, data}` — once per block; `data` is the raw binary
+    - `{:block, cid, data}` — once per block; `data` is the raw binary
 
   Raises on any parse error (truncated stream, invalid header, CID mismatch,
   etc.).
@@ -33,7 +33,7 @@ defmodule DASL.CAR.StreamDecoder do
 
   ## Options
 
-    * `:verify` — boolean, default `true`. Verifies each block's raw data
+    - `:verify` — boolean, default `true`. Verifies each block's raw data
       against its CID digest using `DASL.CID.verify?/2`. Raises on mismatch.
 
   ## Examples
