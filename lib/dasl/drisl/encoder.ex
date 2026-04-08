@@ -89,6 +89,10 @@ defmodule DASL.DRISL.Encoder do
     {:ok, encode_string(3, s)}
   end
 
+  defp encode_value(%CBOR.Tag{tag: :bytes, value: data}) when is_binary(data) do
+    {:ok, encode_string(2, data)}
+  end
+
   defp encode_value(%DASL.CID{} = cid) do
     %CBOR.Tag{tag: 42, value: %CBOR.Tag{tag: :bytes, value: cid_bytes}} = DASL.CID.to_cbor(cid)
     {:ok, encode_head(6, 42) <> encode_string(2, cid_bytes)}

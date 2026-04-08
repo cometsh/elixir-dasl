@@ -115,7 +115,6 @@ defmodule DASL.CAR.StreamDecoder do
   defp finish({phase, leftover, _verify}) do
     # TODO: when loading my repo with `File.stream!()` without any byte chunking, this fails here.
     # But specifying any bytes makes it work. Is there something seen in it that looks like newline which gets consumed?
-    IO.inspect(leftover, label: "leftovers")
     raise "CAR stream ended with #{byte_size(leftover)} unprocessed bytes in phase #{phase}"
   end
 
