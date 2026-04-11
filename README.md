@@ -10,8 +10,8 @@ IPFS/IPLD ecosystem while remaining minimal and self-contained.
 
 This library provides:
 
-- `DASL.CID`: content identifiers, a compact, self-describing pointer to a
-  piece of data.
+- `DASL.CID`: content identifiers, a compact, self-describing pointer to a piece
+  of data.
 - `DASL.DRISL`: deterministic CBOR serialization.
 - `DASL.CAR`: Content-Addressable aRchive encoding and decoding, as well as a
   stream decoder.

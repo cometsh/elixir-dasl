@@ -39,12 +39,14 @@ defmodule DASL.DRISL.Encoder do
   @spec encode(any()) :: {:ok, binary()} | {:error, atom()}
   def encode(term) do
     case encode_value(term) do
-      {:ok, binary} -> {:ok, binary}
+      {:ok, iodata} -> {:ok, IO.iodata_to_binary(iodata)}
       {:error, _} = err -> err
     end
   end
 
-  @spec encode_value(any()) :: {:ok, binary()} | {:error, atom()}
+  # Returns {:ok, iodata} internally — callers must not assume a flat binary
+  # until encode/1 flattens at the boundary.
+  @spec encode_value(any()) :: {:ok, iodata()} | {:error, atom()}
 
   defp encode_value(nil), do: {:ok, <<0xF6>>}
   defp encode_value(false), do: {:ok, <<0xF4>>}
@@ -60,12 +62,12 @@ defmodule DASL.DRISL.Encoder do
 
   defp encode_value(i) when is_integer(i) and i >= 0x10000000000000000 do
     bytes = :binary.encode_unsigned(i)
-    {:ok, encode_head(6, 2) <> encode_string(2, bytes)}
+    {:ok, [encode_head(6, 2), encode_string(2, bytes)]}
   end
 
   defp encode_value(i) when is_integer(i) do
     bytes = :binary.encode_unsigned(-i - 1)
-    {:ok, encode_head(6, 3) <> encode_string(2, bytes)}
+    {:ok, [encode_head(6, 3), encode_string(2, bytes)]}
   end
 
   defp encode_value(f) when is_float(f) do
@@ -80,32 +82,30 @@ defmodule DASL.DRISL.Encoder do
     {:ok, encode_string(2, data)}
   end
 
-  defp encode_value(%DASL.CID{} = cid) do
-    %CBOR.Tag{tag: 42, value: %CBOR.Tag{tag: :bytes, value: cid_bytes}} = DASL.CID.to_cbor(cid)
-    {:ok, encode_head(6, 42) <> encode_string(2, cid_bytes)}
+  defp encode_value(%DASL.CID{bytes: cid_bytes}) do
+    {:ok, [encode_head(6, 42), encode_string(2, <<0, cid_bytes::binary>>)]}
   end
 
   defp encode_value(list) when is_list(list) do
-    with {:ok, items_bin} <- encode_list_items(list) do
-      {:ok, encode_head(4, length(list)) <> items_bin}
+    with {:ok, items_iodata} <- encode_list_items(list) do
+      {:ok, [encode_head(4, length(list)) | items_iodata]}
     end
   end
 
   defp encode_value(%{} = map) do
     with :ok <- validate_map_keys(map),
          {:ok, sorted_pairs} <- encode_and_sort_map_pairs(map) do
-      pairs_bin = Enum.map_join(sorted_pairs, fn {k_bin, v_bin} -> k_bin <> v_bin end)
-      {:ok, encode_head(5, map_size(map)) <> pairs_bin}
+      {:ok, [encode_head(5, map_size(map)) | sorted_pairs]}
     end
   end
 
   defp encode_value(_), do: {:error, :unsupported_type}
 
-  @spec encode_list_items(list()) :: {:ok, binary()} | {:error, atom()}
+  @spec encode_list_items(list()) :: {:ok, iodata()} | {:error, atom()}
   defp encode_list_items(list) do
-    Enum.reduce_while(list, {:ok, <<>>}, fn item, {:ok, acc} ->
+    Enum.reduce_while(list, {:ok, []}, fn item, {:ok, acc} ->
       case encode_value(item) do
-        {:ok, bin} -> {:cont, {:ok, acc <> bin}}
+        {:ok, iodata} -> {:cont, {:ok, [acc | [iodata]]}}
         {:error, _} = err -> {:halt, err}
       end
     end)
@@ -122,21 +122,28 @@ defmodule DASL.DRISL.Encoder do
 
   # Encodes all key/value pairs, then sorts by bytewise-lexicographic order
   # of the encoded key — length-first (RFC 7049 §3.9 canonical CBOR sort).
-  # Example from spec: {"a": ..., "b": ..., "aa": ...}
-  @spec encode_and_sort_map_pairs(map()) :: {:ok, [{binary(), binary()}]} | {:error, atom()}
+  # Returns a flat iodata list of interleaved [k_bin, v_bin, ...] after sorting.
+  @spec encode_and_sort_map_pairs(map()) :: {:ok, iodata()} | {:error, atom()}
   defp encode_and_sort_map_pairs(map) do
     map
     |> Enum.reduce_while({:ok, []}, fn {k, v}, {:ok, acc} ->
       with {:ok, k_bin} <- encode_value(k),
-           {:ok, v_bin} <- encode_value(v) do
-        {:cont, {:ok, [{k_bin, v_bin} | acc]}}
+           {:ok, v_iodata} <- encode_value(v) do
+        # Flatten k to a binary now so we can sort on it cheaply;
+        # v stays as iodata.
+        k_flat = IO.iodata_to_binary(k_bin)
+        {:cont, {:ok, [{k_flat, v_iodata} | acc]}}
       else
         {:error, _} = err -> {:halt, err}
       end
     end)
     |> case do
       {:ok, pairs} ->
-        sorted = Enum.sort_by(pairs, fn {k_bin, _} -> {byte_size(k_bin), k_bin} end)
+        sorted =
+          pairs
+          |> Enum.sort_by(fn {k_flat, _} -> {byte_size(k_flat), k_flat} end)
+          |> Enum.flat_map(fn {k_flat, v_iodata} -> [k_flat, v_iodata] end)
+
         {:ok, sorted}
 
       err ->

@@ -204,19 +204,9 @@ defmodule DASL.CAR.StreamDecoder do
     <<cid_bytes::binary-size(@cid_byte_size), data::binary>> = frame
 
     cid =
-      case CID.decode(cid_bytes) do
-        {:ok, fields} ->
-          struct!(CID,
-            version: fields.version,
-            codec: fields.codec,
-            hash_type: fields.hash_type,
-            hash_size: fields.hash_size,
-            digest: fields.digest,
-            bytes: cid_bytes
-          )
-
-        {:error, reason} ->
-          raise "CAR stream: invalid CID (#{inspect(reason)})"
+      case CID.from_bytes(cid_bytes) do
+        {:ok, cid} -> cid
+        {:error, reason} -> raise "CAR stream: invalid CID (#{inspect(reason)})"
       end
 
     if verify and not CID.verify?(cid, data) do

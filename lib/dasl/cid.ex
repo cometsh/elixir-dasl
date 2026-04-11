@@ -118,6 +118,47 @@ defmodule DASL.CID do
   def decode(_), do: {:error, "malformed CID bytes"}
 
   @doc """
+  Constructs a `DASL.CID` struct directly from raw CID bytes.
+
+  Equivalent to `decode/1` followed by `struct!/2`, but skips the intermediate
+  anonymous map allocation. Intended for hot paths in decoders.
+
+  ## Examples
+
+      iex> bytes = <<1, 85, 18, 32, 185, 77, 39, 185, 147, 77, 62, 8, 165, 46, 82, 215,
+      ...>           218, 125, 171, 250, 196, 132, 239, 227, 122, 83, 128, 238, 144, 136,
+      ...>           247, 172, 226, 239, 205, 233>>
+      iex> {:ok, cid} = DASL.CID.from_bytes(bytes)
+      iex> cid.codec
+      :raw
+
+      iex> DASL.CID.from_bytes(<<2, 85, 18, 32>> <> :binary.copy(<<0>>, 32))
+      {:error, "unsupported CID version: 2"}
+
+  """
+  @spec from_bytes(binary()) :: {:ok, t()} | {:error, String.t()}
+  def from_bytes(<<1, codec_byte, @hash_sha256, hash_size, digest::binary>> = bytes)
+      when hash_size == @hash_size and byte_size(digest) == @hash_size do
+    with {:ok, codec} <- decode_codec(codec_byte) do
+      {:ok,
+       struct!(__MODULE__,
+         version: 1,
+         codec: codec,
+         hash_type: @hash_sha256,
+         hash_size: @hash_size,
+         digest: digest,
+         bytes: bytes
+       )}
+    end
+  end
+
+  def from_bytes(bytes) when is_binary(bytes) do
+    case decode(bytes) do
+      {:error, _} = err -> err
+    end
+  end
+
+  @doc """
   Constructs a `DASL.CID` from a string-encoded CID.
 
   ## Examples
@@ -138,17 +179,8 @@ defmodule DASL.CID do
   """
   @spec new(String.t()) :: {:ok, t()} | {:error, String.t()}
   def new(cid_string) when is_binary(cid_string) do
-    with {:ok, bytes} <- parse(cid_string),
-         {:ok, fields} <- decode(bytes) do
-      {:ok,
-       struct!(__MODULE__,
-         version: fields.version,
-         codec: fields.codec,
-         hash_type: fields.hash_type,
-         hash_size: fields.hash_size,
-         digest: fields.digest,
-         bytes: bytes
-       )}
+    with {:ok, bytes} <- parse(cid_string) do
+      from_bytes(bytes)
     end
   end
 
@@ -214,17 +246,7 @@ defmodule DASL.CID do
         tag: 42,
         value: %CBOR.Tag{tag: :bytes, value: <<0, cid_bytes::binary>>}
       }) do
-    with {:ok, fields} <- decode(cid_bytes) do
-      {:ok,
-       struct!(__MODULE__,
-         version: fields.version,
-         codec: fields.codec,
-         hash_type: fields.hash_type,
-         hash_size: fields.hash_size,
-         digest: fields.digest,
-         bytes: cid_bytes
-       )}
-    end
+    from_bytes(cid_bytes)
   end
 
   def from_cbor(_), do: {:error, "invalid CBOR CID tag"}

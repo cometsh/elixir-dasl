@@ -33,7 +33,8 @@ defmodule DASL.MixProject do
       {:typedstruct, "~> 0.5"},
       {:varint, "~> 1.4"},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
-      {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:benchee, "~> 1.3", only: :dev, runtime: false}
     ]
   end
 

@@ -92,20 +92,9 @@ defmodule DASL.CAR.Decoder do
 
   @spec parse_cid(binary()) :: {:ok, CID.t()} | block_error()
   defp parse_cid(cid_bytes) do
-    case CID.decode(cid_bytes) do
-      {:ok, fields} ->
-        {:ok,
-         struct!(CID,
-           version: fields.version,
-           codec: fields.codec,
-           hash_type: fields.hash_type,
-           hash_size: fields.hash_size,
-           digest: fields.digest,
-           bytes: cid_bytes
-         )}
-
-      {:error, reason} ->
-        {:error, :block, {:invalid_cid, reason}}
+    case CID.from_bytes(cid_bytes) do
+      {:ok, cid} -> {:ok, cid}
+      {:error, reason} -> {:error, :block, {:invalid_cid, reason}}
     end
   end
 

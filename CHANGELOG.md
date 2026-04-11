@@ -13,6 +13,10 @@ and this project adheres to
 - `~CID` sigil for easily constructing known CIDs.
 - New inspect string for CIDs using the new sigil.
 
+### Changed
+
+- Memory usage improvements for DRISL and CAR encoding & decoding.
+
 ## [0.1.0] - 2026-04-08
 
 Initial release, with CID, DRISL, and CAR support.
