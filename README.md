@@ -59,7 +59,7 @@ Get elixir-dasl from [hex.pm](https://hex.pm) by adding it to your `mix.exs`:
 ```elixir
 def deps do
   [
-    {:dasl, "~> 0.1.0"}
+    {:dasl, "~> 0.1"}
   ]
 end
 ```
