@@ -153,6 +153,34 @@ defmodule DASL.CID do
   end
 
   @doc """
+  Constructs a `DASL.CID` from a string-encoded CID, raising on failure.
+
+  Equivalent to `new/1` but raises `ArgumentError` instead of returning
+  `{:error, reason}`. Useful in contexts where an invalid CID is a
+  programming error rather than expected user input.
+
+  ## Examples
+
+      iex> cid = DASL.CID.new!("bafkreifzjut3te2nhyekklss27nh3k72ysco7y32koao5eei66wof36n5e")
+      iex> cid.codec
+      :raw
+
+      iex> DASL.CID.new!("not-a-cid")
+      ** (ArgumentError) invalid CID 'not-a-cid': "CID must start with 'b'"
+
+  """
+  @spec new!(String.t()) :: t()
+  def new!(cid_string) when is_binary(cid_string) do
+    case new(cid_string) do
+      {:ok, cid} ->
+        cid
+
+      {:error, reason} ->
+        raise ArgumentError, message: "invalid CID '#{cid_string}': #{inspect(reason)}"
+    end
+  end
+
+  @doc """
   Encodes a `DASL.CID` back to its canonical string form.
 
   ## Examples
@@ -279,6 +307,26 @@ defmodule DASL.CID do
     :crypto.hash_equals(digest, candidate)
   end
 
+  @doc """
+  Sigil for constructing a `DASL.CID` from a compile-time string literal.
+
+  Delegates to `new!/1`, so it raises `ArgumentError` on an invalid CID
+  string. Import `DASL.CID` (or `import DASL.CID, only: [sigil_CID: 2]`) to
+  bring the sigil into scope.
+
+  ## Examples
+
+      iex> import DASL.CID
+      iex> cid = ~CID"bafkreifzjut3te2nhyekklss27nh3k72ysco7y32koao5eei66wof36n5e"
+      iex> cid.codec
+      :raw
+      iex> cid.version
+      1
+
+  """
+  @spec sigil_CID(String.t(), list()) :: t()
+  def sigil_CID(string, _), do: new!(string)
+
   defp decode_codec(@codec_raw), do: {:ok, :raw}
   defp decode_codec(@codec_drisl), do: {:ok, :drisl}
 
@@ -296,6 +344,6 @@ end
 defimpl Inspect, for: DASL.CID do
   def inspect(cid, _opts) do
     cid = DASL.CID.encode(cid)
-    ~s'DASL.CID.new("#{cid}")'
+    ~s'~CID"#{cid}"'
   end
 end

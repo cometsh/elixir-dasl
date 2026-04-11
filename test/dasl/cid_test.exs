@@ -108,6 +108,71 @@ defmodule DASL.CIDTest do
     end
   end
 
+  describe "new!/1" do
+    test "returns a CID struct on a valid string" do
+      assert %DASL.CID{} = DASL.CID.new!(@raw_cid)
+    end
+
+    test "returned struct matches new/1" do
+      {:ok, expected} = DASL.CID.new(@raw_cid)
+      assert DASL.CID.new!(@raw_cid) == expected
+    end
+
+    test "raises ArgumentError on an invalid prefix" do
+      assert_raise ArgumentError, ~r/invalid CID 'not-a-cid'/, fn ->
+        DASL.CID.new!("not-a-cid")
+      end
+    end
+
+    test "raises ArgumentError on malformed base32" do
+      assert_raise ArgumentError, ~r/invalid CID/, fn ->
+        DASL.CID.new!("b!!!!!")
+      end
+    end
+
+    test "raises ArgumentError on an invalid CID version embedded in the bytes" do
+      bad_bytes = <<2, 0x55, 0x12, 0x20>> <> @digest
+      bad_str = "b" <> Base.encode32(bad_bytes, case: :lower, padding: false)
+
+      assert_raise ArgumentError, ~r/unsupported CID version/, fn ->
+        DASL.CID.new!(bad_str)
+      end
+    end
+  end
+
+  describe "~CID sigil" do
+    import DASL.CID, only: [sigil_CID: 2]
+
+    test "constructs a CID struct from a literal string" do
+      assert %DASL.CID{} =
+               ~CID"bafkreifzjut3te2nhyekklss27nh3k72ysco7y32koao5eei66wof36n5e"
+    end
+
+    test "produced struct equals new!/1" do
+      assert ~CID"bafkreifzjut3te2nhyekklss27nh3k72ysco7y32koao5eei66wof36n5e" ==
+               DASL.CID.new!(@raw_cid)
+    end
+
+    test "codec is preserved for raw" do
+      assert ~CID"bafkreifzjut3te2nhyekklss27nh3k72ysco7y32koao5eei66wof36n5e".codec == :raw
+    end
+
+    test "codec is preserved for drisl" do
+      assert ~CID"bafyreifzjut3te2nhyekklss27nh3k72ysco7y32koao5eei66wof36n5e".codec == :drisl
+    end
+
+    test "round-trips through encode" do
+      assert DASL.CID.encode(~CID"bafkreifzjut3te2nhyekklss27nh3k72ysco7y32koao5eei66wof36n5e") ==
+               @raw_cid
+    end
+
+    test "raises ArgumentError on an invalid CID string" do
+      assert_raise ArgumentError, ~r/invalid CID/, fn ->
+        DASL.CID.sigil_CID("not-a-cid", [])
+      end
+    end
+  end
+
   describe "encode/1" do
     test "round-trips a raw CID" do
       {:ok, cid} = DASL.CID.new(@raw_cid)
